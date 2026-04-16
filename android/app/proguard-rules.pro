@@ -1,0 +1,10 @@
+-keep class io.flutter.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class id.sekolah.pengunci_ujian.** { *; }
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
+-keep class com.pichillilorenzo.flutter_inappwebview.** { *; }
+-dontwarn com.pichillilorenzo.flutter_inappwebview.**
