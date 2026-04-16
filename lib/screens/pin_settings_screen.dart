@@ -16,18 +16,6 @@ class _PinSettingsScreenState extends State<PinSettingsScreen> {
   final _confirmPin = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _saving = false;
-  String _currentPin = '...';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentPin();
-  }
-
-  Future<void> _loadCurrentPin() async {
-    final pin = await PinService.getPin();
-    if (mounted) setState(() => _currentPin = pin);
-  }
 
   @override
   void dispose() {
@@ -41,7 +29,7 @@ class _PinSettingsScreenState extends State<PinSettingsScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _saving = true);
-    final ok = await PinService.verify(_oldPin.text);
+    final ok = await PinService.verify(_oldPin.text.trim());
     if (!ok) {
       setState(() => _saving = false);
       _showSnack('PIN lama salah', error: true);
@@ -50,11 +38,8 @@ class _PinSettingsScreenState extends State<PinSettingsScreen> {
 
     await PinService.setPin(_newPin.text);
     if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _currentPin = _newPin.text;
-    });
-    _showSnack('PIN berhasil diubah ke: ${_newPin.text}');
+    setState(() => _saving = false);
+    _showSnack('PIN berhasil diubah');
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -134,9 +119,9 @@ class _PinSettingsScreenState extends State<PinSettingsScreen> {
                   children: [
                     const Icon(Icons.info, color: Colors.blue),
                     const SizedBox(width: 8),
-                    Text(
-                      'PIN saat ini: ${'•' * _currentPin.length} (${_currentPin.length} digit)',
-                      style: const TextStyle(
+                    const Text(
+                      'PIN saat ini: tersimpan',
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -221,8 +206,7 @@ class _PinSettingsScreenState extends State<PinSettingsScreen> {
                   if (confirm == true) {
                     await PinService.resetPin();
                     if (!mounted) return;
-                    setState(() => _currentPin = PinService.defaultPin);
-                    _showSnack('PIN berhasil direset ke default: 2468');
+                    _showSnack('PIN berhasil direset ke default');
                     _oldPin.clear();
                     _newPin.clear();
                     _confirmPin.clear();

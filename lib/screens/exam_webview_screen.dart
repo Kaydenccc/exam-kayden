@@ -52,7 +52,7 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   void _startClipboardCleaner() {
     _clearClipboard();
     _clipboardCleaner = Timer.periodic(
-      const Duration(seconds: 1),
+      const Duration(seconds: 3),
       (_) => _clearClipboard(),
     );
   }
@@ -130,7 +130,7 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
 
     if (ok == true) {
       _clipboardCleaner?.cancel();
-      await KioskService.exitKiosk();
+      if (mounted) await KioskService.exitKiosk();
     }
 
     return ok == true;
@@ -225,8 +225,8 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
                           <html><body style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;background:#111;color:#fff;text-align:center;padding:20px;">
                             <div>
                               <h2>Halaman tidak bisa dimuat</h2>
-                              <p>${error.description}</p>
-                              <p style="color:#aaa;">Periksa koneksi internet lalu tekan tombol muat ulang di atas.</p>
+                              <p style="color:#aaa;">Periksa koneksi internet.</p>
+                              <button onclick="location.reload()" style="padding:12px 24px;background:#1E3A8A;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;margin-top:16px;">Coba Lagi</button>
                             </div>
                           </body></html>
                         ''',

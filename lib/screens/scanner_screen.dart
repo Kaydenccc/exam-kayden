@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -69,11 +70,19 @@ class _ScannerScreenState extends State<ScannerScreen> {
     _launchExam(value);
   }
 
+  static const _kioskChannel = MethodChannel('id.sekolah.pengunci_ujian/kiosk');
+
   Future<void> _launchExam(String raw) async {
     final url = raw.trim();
     if (!_isValidUrl(url)) {
       _showSnack('URL tidak valid. Pastikan diawali http:// atau https://');
       return;
+    }
+
+    // Cek & tutup floating app sebelum masuk ujian
+    if (Platform.isAndroid) {
+      final blocked = await _checkAndBlockOverlays();
+      if (blocked) return;
     }
 
     setState(() => _isProcessing = true);
@@ -90,6 +99,78 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (!mounted) return;
     setState(() => _isProcessing = false);
     try { await _controller?.start(); } catch (_) {}
+  }
+
+  Future<bool> _checkAndBlockOverlays() async {
+    try {
+      await _kioskChannel.invokeMethod('killBackgroundApps');
+
+      final result = await _kioskChannel.invokeMethod('hasOverlayApps');
+      final overlayApps = (result as List?)?.cast<String>() ?? [];
+
+      if (overlayApps.isEmpty) return false;
+
+      if (!mounted) return true;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.block, color: Colors.red),
+              SizedBox(width: 8),
+              Expanded(child: Text('Tidak Bisa Memulai Ujian')),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Matikan izin "Tampil di atas aplikasi lain" untuk aplikasi berikut:',
+              ),
+              const SizedBox(height: 12),
+              ...overlayApps.map((app) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.orange, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(app, style: const TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: 16),
+              const Text(
+                'Buka Pengaturan → matikan semua izin overlay → kembali ke sini → scan ulang.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Kembali'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                try {
+                  await _kioskChannel.invokeMethod('openOverlaySettings');
+                } catch (_) {}
+                if (ctx.mounted) Navigator.of(ctx).pop();
+              },
+              child: const Text('Buka Pengaturan'),
+            ),
+          ],
+        ),
+      );
+
+      // Selalu return true (blokir) — siswa harus matikan overlay dulu
+      return true;
+    } catch (e) {
+      debugPrint('Overlay check error: $e');
+      return false;
+    }
   }
 
   bool _isValidUrl(String url) {
@@ -173,7 +254,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 if (!ctx.mounted) return;
                 setDialogState(() => errorText = null);
                 pinController.clear();
-                _showSnack('PIN direset ke 2468. Ketik 2468 lalu tekan Lanjut.');
+                _showSnack('PIN direset ke default. Ketik PIN default lalu tekan Lanjut.');
               },
               child: const Text('Reset PIN', style: TextStyle(color: Colors.orange)),
             ),
