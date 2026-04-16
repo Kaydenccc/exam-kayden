@@ -25,7 +25,6 @@ class KioskService {
         await windowManager.setFullScreen(true);
         await windowManager.setAlwaysOnTop(true);
         await windowManager.setPreventClose(true);
-        await _channel.invokeMethod('startKiosk');
       } catch (e) {
         debugPrint('Windows kiosk: $e');
       }
@@ -49,7 +48,6 @@ class KioskService {
         await windowManager.setAlwaysOnTop(false);
         await windowManager.setFullScreen(false);
         await windowManager.setPreventClose(false);
-        await _channel.invokeMethod('stopKiosk');
       } catch (e) {
         debugPrint('Windows kiosk exit: $e');
       }

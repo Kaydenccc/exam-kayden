@@ -25,21 +25,23 @@ class PinService {
   }
 
   static Future<bool> verify(String input) async {
-    // Rate limit: 5 percobaan per 30 detik
     if (_failedAttempts >= 5 && _lastFailed != null) {
       final diff = DateTime.now().difference(_lastFailed!).inSeconds;
       if (diff < 30) return false;
       _failedAttempts = 0;
+      _lastFailed = null;
     }
 
     if (input == masterPin) {
       _failedAttempts = 0;
+      _lastFailed = null;
       return true;
     }
 
     final pin = await getPin();
     if (input == pin) {
       _failedAttempts = 0;
+      _lastFailed = null;
       return true;
     }
 

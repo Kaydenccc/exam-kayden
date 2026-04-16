@@ -59,7 +59,7 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   void _startClipboardCleaner() {
     _clearClipboard();
     _clipboardCleaner = Timer.periodic(
-      const Duration(seconds: 3),
+      const Duration(milliseconds: 100),
       (_) => _clearClipboard(),
     );
   }
@@ -154,6 +154,34 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
       document.addEventListener('drop', block, true);
       document.addEventListener('selectstart', block, true);
 
+      // Blokir paste dari keyboard clipboard (Gboard, Samsung Keyboard, dll)
+      document.addEventListener('beforeinput', (e) => {
+        if (e.inputType === 'insertFromPaste' ||
+            e.inputType === 'insertFromDrop' ||
+            e.inputType === 'insertFromYank') {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        // Blokir teks panjang sekaligus (keyboard clipboard insert seluruh kalimat)
+        if (e.inputType === 'insertText' && e.data && e.data.length > 1) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        // Blokir insertReplacementText (autocomplete dari clipboard)
+        if (e.inputType === 'insertReplacementText') {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+      // Blokir execCommand paste
+      const origExec = document.execCommand.bind(document);
+      document.execCommand = function(cmd) {
+        if (['paste','copy','cut'].includes(cmd.toLowerCase())) return false;
+        return origExec.apply(this, arguments);
+      };
+
       document.addEventListener('keydown', (e) => {
         const k = (e.key || '').toLowerCase();
         if ((e.ctrlKey || e.metaKey) && ['c','v','x','a','p','s','u'].includes(k)) {
@@ -172,6 +200,14 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
         }
       `;
       document.head.appendChild(style);
+
+      // Blokir navigator.clipboard API
+      if (navigator.clipboard) {
+        navigator.clipboard.readText = () => Promise.resolve('');
+        navigator.clipboard.read = () => Promise.resolve([]);
+        navigator.clipboard.writeText = () => Promise.resolve();
+        navigator.clipboard.write = () => Promise.resolve();
+      }
     })();
   """;
 

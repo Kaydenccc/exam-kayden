@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -25,17 +26,30 @@ class _ScannerScreenState extends State<ScannerScreen> {
   final TextEditingController _urlController = TextEditingController();
   final List<DateTime> _titleTaps = [];
   StreamSubscription? _overlaySub;
+  Timer? _clipboardCleaner;
 
   @override
   void initState() {
     super.initState();
     _initCamera();
+    _startClipboardCleaner();
     if (Platform.isAndroid) {
+      OverlayDetector.stop();
       OverlayDetector.start();
       _overlaySub = OverlayDetector.stream.listen((obscured) {
         if (mounted) setState(() => _overlayDetected = obscured);
       });
     }
+  }
+
+  void _startClipboardCleaner() {
+    Clipboard.setData(const ClipboardData(text: ''));
+    _clipboardCleaner = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) {
+        try { Clipboard.setData(const ClipboardData(text: '')); } catch (_) {}
+      },
+    );
   }
 
   Future<void> _initCamera() async {
@@ -67,6 +81,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   void dispose() {
+    _clipboardCleaner?.cancel();
     _overlaySub?.cancel();
     _controller?.dispose();
     _urlController.dispose();
@@ -181,9 +196,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
             TextButton(
               onPressed: () async {
                 await PinService.resetPin();
-                if (!ctx.mounted) return;
-                setDialogState(() => errorText = null);
-                pinController.clear();
+                if (!mounted) return;
+                if (ctx.mounted) {
+                  setDialogState(() => errorText = null);
+                  pinController.clear();
+                }
                 _showSnack('PIN direset ke default. Ketik PIN default lalu tekan Lanjut.');
               },
               child: const Text('Reset PIN', style: TextStyle(color: Colors.orange)),

@@ -1,6 +1,8 @@
 package id.sekolah.pengunci_ujian
 
 import android.app.ActivityManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
@@ -24,14 +26,25 @@ class MainActivity : FlutterActivity() {
     private var overlaySink: EventChannel.EventSink? = null
     private var lastObscuredState = false
 
-    // Timer yang terus cek apakah app masih di foreground
     private val focusChecker = object : Runnable {
         override fun run() {
             if (isKioskActive) {
                 bringToFront()
+                clearClipboard()
                 handler.postDelayed(this, 500)
             }
         }
+    }
+
+    private fun clearClipboard() {
+        try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                cm.clearPrimaryClip()
+            } else {
+                cm.setPrimaryClip(ClipData.newPlainText("", ""))
+            }
+        } catch (_: Exception) {}
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -68,6 +81,10 @@ class MainActivity : FlutterActivity() {
                         isKioskActive = true
                         handler.removeCallbacks(focusChecker)
                         handler.post(focusChecker)
+                        // Android 12+: sembunyikan SEMUA overlay dari app lain
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            window.setHideOverlayWindows(true)
+                        }
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("KIOSK_FAIL", e.message, null)
@@ -77,6 +94,9 @@ class MainActivity : FlutterActivity() {
                     try {
                         isKioskActive = false
                         handler.removeCallbacks(focusChecker)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            window.setHideOverlayWindows(false)
+                        }
                         if (isLocked) {
                             stopLockTask()
                             isLocked = false
@@ -150,12 +170,18 @@ class MainActivity : FlutterActivity() {
     override fun dispatchTouchEvent(event: MotionEvent?): Boolean {
         if (event != null) {
             val obscured = (event.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED) != 0
-            if (obscured != lastObscuredState) {
-                lastObscuredState = obscured
-                handler.post { overlaySink?.success(obscured) }
+            val partiallyObscured = if (Build.VERSION.SDK_INT >= 29) {
+                (event.flags and MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0
+            } else false
+            val isObscured = obscured || partiallyObscured
+
+            if (isObscured != lastObscuredState) {
+                lastObscuredState = isObscured
+                try {
+                    handler.post { overlaySink?.success(isObscured) }
+                } catch (_: Exception) {}
             }
-            // Blokir sentuhan jika ada overlay dan kiosk aktif
-            if (obscured && isKioskActive) {
+            if (isObscured && isKioskActive) {
                 return true
             }
         }
