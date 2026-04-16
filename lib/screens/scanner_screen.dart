@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../services/overlay_detector.dart';
 import '../services/pin_service.dart';
 import 'exam_webview_screen.dart';
 import 'pin_settings_screen.dart';
@@ -20,13 +21,21 @@ class _ScannerScreenState extends State<ScannerScreen> {
   MobileScannerController? _controller;
   bool _isProcessing = false;
   bool _cameraReady = false;
+  bool _overlayDetected = false;
   final TextEditingController _urlController = TextEditingController();
   final List<DateTime> _titleTaps = [];
+  StreamSubscription? _overlaySub;
 
   @override
   void initState() {
     super.initState();
     _initCamera();
+    if (Platform.isAndroid) {
+      OverlayDetector.start();
+      _overlaySub = OverlayDetector.stream.listen((obscured) {
+        if (mounted) setState(() => _overlayDetected = obscured);
+      });
+    }
   }
 
   Future<void> _initCamera() async {
@@ -58,6 +67,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   void dispose() {
+    _overlaySub?.cancel();
     _controller?.dispose();
     _urlController.dispose();
     super.dispose();
@@ -70,19 +80,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
     _launchExam(value);
   }
 
-  static const _kioskChannel = MethodChannel('id.sekolah.pengunci_ujian/kiosk');
-
   Future<void> _launchExam(String raw) async {
     final url = raw.trim();
     if (!_isValidUrl(url)) {
       _showSnack('URL tidak valid. Pastikan diawali http:// atau https://');
       return;
-    }
-
-    // Cek & tutup floating app sebelum masuk ujian
-    if (Platform.isAndroid) {
-      final blocked = await _checkAndBlockOverlays();
-      if (blocked) return;
     }
 
     setState(() => _isProcessing = true);
@@ -99,78 +101,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (!mounted) return;
     setState(() => _isProcessing = false);
     try { await _controller?.start(); } catch (_) {}
-  }
-
-  Future<bool> _checkAndBlockOverlays() async {
-    try {
-      await _kioskChannel.invokeMethod('killBackgroundApps');
-
-      final result = await _kioskChannel.invokeMethod('hasOverlayApps');
-      final overlayApps = (result as List?)?.cast<String>() ?? [];
-
-      if (overlayApps.isEmpty) return false;
-
-      if (!mounted) return true;
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          title: const Row(
-            children: [
-              Icon(Icons.block, color: Colors.red),
-              SizedBox(width: 8),
-              Expanded(child: Text('Tidak Bisa Memulai Ujian')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Matikan izin "Tampil di atas aplikasi lain" untuk aplikasi berikut:',
-              ),
-              const SizedBox(height: 12),
-              ...overlayApps.map((app) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.warning, color: Colors.orange, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(app, style: const TextStyle(fontWeight: FontWeight.bold))),
-                      ],
-                    ),
-                  )),
-              const SizedBox(height: 16),
-              const Text(
-                'Buka Pengaturan → matikan semua izin overlay → kembali ke sini → scan ulang.',
-                style: TextStyle(fontSize: 13, color: Colors.grey),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Kembali'),
-            ),
-            FilledButton(
-              onPressed: () async {
-                try {
-                  await _kioskChannel.invokeMethod('openOverlaySettings');
-                } catch (_) {}
-                if (ctx.mounted) Navigator.of(ctx).pop();
-              },
-              child: const Text('Buka Pengaturan'),
-            ),
-          ],
-        ),
-      );
-
-      // Selalu return true (blokir) — siswa harus matikan overlay dulu
-      return true;
-    } catch (e) {
-      debugPrint('Overlay check error: $e');
-      return false;
-    }
   }
 
   bool _isValidUrl(String url) {
@@ -317,6 +247,55 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        _buildMainScreen(),
+        if (_overlayDetected) _buildOverlayWarning(),
+      ],
+    );
+  }
+
+  Widget _buildOverlayWarning() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () {},
+        behavior: HitTestBehavior.opaque,
+        child: Material(
+          color: Colors.red.shade900.withValues(alpha: 0.97),
+          child: const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.white, size: 80),
+                  SizedBox(height: 20),
+                  Text(
+                    'FLOATING APP TERDETEKSI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Tutup semua aplikasi floating / mengambang di layar Anda.\n\n'
+                    'Aplikasi ini tidak bisa digunakan selama ada aplikasi lain yang tampil di atas layar.',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMainScreen() {
     return Scaffold(
       appBar: AppBar(
         title: GestureDetector(

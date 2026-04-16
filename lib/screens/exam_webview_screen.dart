@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../services/kiosk_service.dart';
+import '../services/overlay_detector.dart';
 import '../services/pin_service.dart';
 
 class ExamWebViewScreen extends StatefulWidget {
@@ -21,6 +22,8 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   bool _loading = true;
   double _progress = 0;
   Timer? _clipboardCleaner;
+  bool _overlayDetected = false;
+  StreamSubscription? _overlaySub;
 
   @override
   void initState() {
@@ -28,10 +31,14 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
     WidgetsBinding.instance.addObserver(this);
     KioskService.enterKiosk();
     _startClipboardCleaner();
+    _overlaySub = OverlayDetector.stream.listen((obscured) {
+      if (mounted) setState(() => _overlayDetected = obscured);
+    });
   }
 
   @override
   void dispose() {
+    _overlaySub?.cancel();
     _clipboardCleaner?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     KioskService.exitKiosk();
@@ -112,13 +119,13 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
               onPressed: () async {
                 FocusScope.of(ctx).unfocus();
                 final input = pinController.text.trim();
-                final storedPin = await PinService.getPin();
+                final valid = await PinService.verify(input);
                 if (!ctx.mounted) return;
-                if (input == storedPin) {
+                if (valid) {
                   Navigator.of(ctx).pop(true);
                 } else {
                   setDialogState(() =>
-                      errorText = 'PIN salah! (Anda ketik: $input)');
+                      errorText = 'PIN salah!');
                 }
               },
               child: const Text('Keluar'),
@@ -182,14 +189,16 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              _buildTopBar(),
-              if (_loading)
-                LinearProgressIndicator(
-                  value: _progress == 0 ? null : _progress,
-                ),
-              Expanded(
+              Column(
+                children: [
+                  _buildTopBar(),
+                  if (_loading)
+                    LinearProgressIndicator(
+                      value: _progress == 0 ? null : _progress,
+                    ),
+                  Expanded(
                 child: InAppWebView(
                   initialUrlRequest: URLRequest(url: WebUri(widget.url)),
                   initialSettings: InAppWebViewSettings(
@@ -243,6 +252,49 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
                 ),
               ),
             ],
+          ),
+          if (_overlayDetected) _buildOverlayWarning(),
+        ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverlayWarning() {
+    return Positioned.fill(
+      child: GestureDetector(
+        onTap: () {},
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          color: Colors.red.shade900.withValues(alpha: 0.95),
+          child: const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.white, size: 80),
+                  SizedBox(height: 20),
+                  Text(
+                    'FLOATING APP TERDETEKSI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Tutup semua aplikasi floating / mengambang di layar Anda.\n\n'
+                    'Ujian tidak bisa dilanjutkan selama ada aplikasi lain yang tampil di atas layar.',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
