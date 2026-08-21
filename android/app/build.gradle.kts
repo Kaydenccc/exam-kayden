@@ -28,6 +28,23 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // WAJIB samakan dengan --target-platform saat build.
+        // Tanpa ini, plugin (ML Kit barcode, datastore, CameraX) menyelipkan
+        // .so untuk ABI yang tidak kita build. HP 32-bit lalu memilih
+        // armeabi-v7a sebagai ABI utama, berhasil install, lalu CRASH saat
+        // dibuka karena libflutter.so/libapp.so tidak ada di ABI itu.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
+    }
+
+    // ndk.abiFilters tidak selalu menyaring .so bawaan AAR pihak ketiga,
+    // jadi ABI yang tidak kita build dibuang lagi saat packaging.
+    packaging {
+        jniLibs {
+            excludes += setOf("lib/x86/**", "lib/x86_64/**")
+        }
     }
 
     buildTypes {

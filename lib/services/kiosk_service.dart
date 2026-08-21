@@ -31,6 +31,18 @@ class KioskService {
     }
   }
 
+  /// Bersihkan clipboard lewat native (clearPrimaryClip), bukan
+  /// Clipboard.setData — menulis ke clipboard memunculkan overlay
+  /// sistem "Disalin / Kirim ke perangkat" yang menutupi keyboard.
+  static Future<void> clearClipboard() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod('clearClipboard');
+    } on PlatformException catch (e) {
+      debugPrint('clearClipboard failed: ${e.message}');
+    }
+  }
+
   static Future<void> exitKiosk() async {
     try { await WakelockPlus.disable(); } catch (e) { debugPrint('Wakelock disable: $e'); }
     try { await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); } catch (e) { debugPrint('SystemUI reset: $e'); }

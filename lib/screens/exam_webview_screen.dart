@@ -21,7 +21,6 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   InAppWebViewController? _webController;
   bool _loading = true;
   double _progress = 0;
-  Timer? _clipboardCleaner;
   bool _overlayDetected = false;
   StreamSubscription? _overlaySub;
 
@@ -30,7 +29,7 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     KioskService.enterKiosk();
-    _startClipboardCleaner();
+    _clearClipboard();
     _overlaySub = OverlayDetector.stream.listen((obscured) {
       if (mounted) setState(() => _overlayDetected = obscured);
     });
@@ -39,7 +38,6 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   @override
   void dispose() {
     _overlaySub?.cancel();
-    _clipboardCleaner?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     KioskService.exitKiosk();
     super.dispose();
@@ -49,26 +47,15 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       KioskService.enterKiosk();
-      _clipboardCleaner?.cancel();
-      _startClipboardCleaner();
-    } else if (state == AppLifecycleState.paused) {
-      _clipboardCleaner?.cancel();
+      // Bersihkan sekali: bisa saja siswa menyalin sesuatu di app lain
+      // sebelum kembali ke ujian.
+      _clearClipboard();
     }
   }
 
-  void _startClipboardCleaner() {
-    _clearClipboard();
-    _clipboardCleaner = Timer.periodic(
-      const Duration(milliseconds: 100),
-      (_) => _clearClipboard(),
-    );
-  }
-
-  Future<void> _clearClipboard() async {
-    try {
-      await Clipboard.setData(const ClipboardData(text: ''));
-    } catch (_) {}
-  }
+  // Clipboard dibersihkan native secara event-driven saat kiosk aktif.
+  // Di sini cukup sekali bersihkan sisa clipboard sebelum ujian dimulai.
+  Future<void> _clearClipboard() => KioskService.clearClipboard();
 
   Future<bool> _confirmExit() async {
     final pinController = TextEditingController();
@@ -136,7 +123,6 @@ class _ExamWebViewScreenState extends State<ExamWebViewScreen>
     );
 
     if (ok == true) {
-      _clipboardCleaner?.cancel();
       if (mounted) await KioskService.exitKiosk();
     }
 

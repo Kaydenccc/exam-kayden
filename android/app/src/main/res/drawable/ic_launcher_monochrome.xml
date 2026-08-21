@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed icon Android 13+: siluet perisai dengan lubang kunci.
+     Warna diisi oleh sistem, jadi fillColor sengaja putih polos. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M35.15,37.03
+            Q35.15,31 41.18,31
+            L66.82,31
+            Q72.85,31 72.85,37.03
+            L72.85,54.92
+            Q72.85,72.4 54,77
+            Q35.15,72.4 35.15,54.92
+            Z
+            M48.34,51.24
+            a5.66,5.66 0 1 0 11.32,0
+            a5.66,5.66 0 1 0 -11.32,0
+            Z
+            M51.62,53.79
+            L56.38,53.79
+            L58.53,65.72
+            L49.47,65.72
+            Z" />
+</vector>
